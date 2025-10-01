@@ -3,7 +3,7 @@
 ![AITuber OnAir Puppet Controller Logo](logo/aituber-onair-puppet-controller_logo.png)
 
 ## Overview
-AITuber OnAir Puppet Controller provides a lightweight WebSocket relay and HTTP trigger endpoint for driving the AITuber OnAir client from external tools. It offers a Go implementation together with an integrated browser UI for direct control.
+AITuber OnAir Puppet Controller provides a lightweight WebSocket relay and HTTP trigger endpoint for driving the [AITuber OnAir](https://aituberonair.com) client from external tools. It offers a Go implementation together with an integrated browser UI for direct control.
 
 [日本語版](./README.ja.md)
 

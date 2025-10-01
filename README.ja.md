@@ -3,7 +3,7 @@
 ![AITuber OnAir Puppet Controller ロゴ](logo/aituber-onair-puppet-controller_logo.png)
 
 ## 概要
-AITuber OnAir Puppet Controller は、外部ツールから AITuber OnAir クライアントを制御するための軽量な WebSocket リレー兼 HTTP トリガーサーバーです。Go 実装による内蔵 Web UI から直接操作できます。
+AITuber OnAir Puppet Controller は、外部ツールから [AITuber OnAir](https://aituberonair.com) クライアントを制御するための軽量な WebSocket リレー兼 HTTP トリガーサーバーです。Go 実装による内蔵 Web UI から直接操作できます。
 
 ## 特長
 - `/direct-speech` に接続した全ての WebSocket クライアントへチャットペイロードをブロードキャスト。
