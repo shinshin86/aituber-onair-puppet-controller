@@ -1,0 +1,19 @@
+# Go build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+aituber-onair-puppet-controller
+
+# Go workspaces and modules
+bin/
+vendor/
+
+# Local build cache
+.gocache/
+
+# OS-specific files
+.DS_Store
