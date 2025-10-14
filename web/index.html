@@ -17,6 +17,10 @@
       .log-entry { padding: 14px 16px; border-radius: 12px; border: 1px solid #dbe1ff; background: #ffffff; box-shadow: 0 4px 12px rgba(71, 82, 196, 0.1); display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; }
       .log-body { margin: 0; font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; flex: 1; }
       .log-timestamp { margin: 0; font-size: 0.8rem; color: #666; white-space: nowrap; }
+      .log-meta { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+      .copy-button { margin-top: 0; padding: 8px 16px; font-size: 0.85rem; border-radius: 999px; background: #eff2ff; border: 1px solid #c7d0ff; color: #4752c4; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+      .copy-button:hover { background: #dbe1ff; color: #2b3aa5; }
+      .copy-button:disabled { background: #f6f7ff; color: #7b84cc; cursor: default; }
       .status-main { margin-bottom: 4px; font-size: 1rem; color: #444; transition: color 0.2s ease; }
       .status-main[data-state="connected"] { color: #2b8a3e; }
       .status-main[data-state="disconnected"],
@@ -49,6 +53,29 @@
       const clientStatusNoteEl = document.getElementById('clientStatusNote');
       const clientStatusUpdatedEl = document.getElementById('clientStatusUpdated');
       const logEl = document.getElementById('log');
+
+      const copyToClipboard = async (text) => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          return;
+        }
+        const helper = document.createElement('textarea');
+        helper.value = text;
+        helper.setAttribute('readonly', '');
+        helper.style.position = 'fixed';
+        helper.style.top = '-9999px';
+        document.body.appendChild(helper);
+        helper.focus();
+        helper.select();
+        try {
+          const success = document.execCommand('copy');
+          if (!success) {
+            throw new Error('document.execCommand("copy") failed');
+          }
+        } finally {
+          document.body.removeChild(helper);
+        }
+      };
 
       const refreshClientStatus = async () => {
         if (clientStatusEl.dataset.state === 'checking') {
@@ -92,11 +119,37 @@
         bodyEl.className = 'log-body';
         bodyEl.textContent = text;
 
+        const metaEl = document.createElement('div');
+        metaEl.className = 'log-meta';
+
         const timeEl = document.createElement('p');
         timeEl.className = 'log-timestamp';
         timeEl.textContent = new Date().toLocaleString();
 
-        entry.append(bodyEl, timeEl);
+        const copyButton = document.createElement('button');
+        copyButton.type = 'button';
+        copyButton.className = 'copy-button';
+        copyButton.textContent = 'コピー';
+        copyButton.setAttribute('aria-label', 'テキストをコピー');
+        copyButton.addEventListener('click', async () => {
+          copyButton.disabled = true;
+          try {
+            await copyToClipboard(text);
+            const originalText = copyButton.textContent;
+            copyButton.textContent = 'コピーしました';
+            setTimeout(() => {
+              copyButton.textContent = originalText;
+              copyButton.disabled = false;
+            }, 2000);
+          } catch (err) {
+            console.error('[copy] clipboard error', err);
+            alert('クリップボードへのコピーに失敗しました');
+            copyButton.disabled = false;
+          }
+        });
+
+        metaEl.append(copyButton, timeEl);
+        entry.append(bodyEl, metaEl);
         logEl.prepend(entry);
 
         while (logEl.childElementCount > 50) {
