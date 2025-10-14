@@ -29,6 +29,16 @@
       .status-updated { margin-bottom: 12px; font-size: 0.75rem; color: #777; }
       form { margin-top: 16px; }
       label { display: block; margin-bottom: 8px; font-weight: 600; }
+      .speech-section { margin-top: 16px; padding: 12px 16px; border-radius: 12px; border: 1px solid #dbe1ff; background: #f6f7ff; display: flex; flex-direction: column; gap: 8px; }
+      .speech-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .speech-status { margin: 0; font-size: 0.9rem; color: #4752c4; flex: 1 1 auto; }
+      .speech-row button { margin-top: 0; flex: 0 0 auto; }
+      .speech-note { margin: 0; font-size: 0.8rem; color: #c92a2a; }
+      button.secondary { background: #818cf8; transition: background 0.2s ease, opacity 0.2s ease; }
+      button.secondary:hover { background: #6366f1; }
+      button.secondary[data-mode="listening"] { background: #22c55e; }
+      button.secondary[data-mode="listening"]:hover { background: #16a34a; }
+      button.secondary:disabled { background: #c7d2fe; color: rgba(255,255,255,0.8); cursor: not-allowed; opacity: 0.9; }
     </style>
   </head>
   <body>
@@ -44,6 +54,13 @@
       <form id="speechForm">
         <label for="speechText">送信テキスト（「[happy] こんにちは！」 のように感情タグも記述可能です）</label>
         <textarea id="speechText" placeholder="[happy] こんにちは！"></textarea>
+        <div class="speech-section" aria-live="polite">
+          <div class="speech-row">
+            <p class="speech-status" id="speechStatus">音声入力は停止中です。</p>
+            <button type="button" id="speechToggleButton" class="secondary">音声入力開始</button>
+          </div>
+          <p class="speech-note" id="speechSupportNote" hidden></p>
+        </div>
         <button type="submit">送信</button>
       </form>
       <div class="log" id="log" role="log" aria-live="polite"></div>
@@ -154,7 +171,7 @@
 
         while (logEl.childElementCount > 50) {
           logEl.removeChild(logEl.lastElementChild);
-        }
+          }
       };
       const ws = new WebSocket('ws://' + location.host + '/direct-speech?client=ui');
 
@@ -177,10 +194,125 @@
         clearInterval(statusTimer);
       });
 
+      const speechTextEl = document.getElementById('speechText');
+      const speechToggleButton = document.getElementById('speechToggleButton');
+      const speechStatusEl = document.getElementById('speechStatus');
+      const speechSupportNoteEl = document.getElementById('speechSupportNote');
+
+      speechToggleButton.dataset.mode = 'idle';
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        speechStatusEl.textContent = '音声入力は利用できません。';
+        speechSupportNoteEl.hidden = false;
+        speechSupportNoteEl.textContent = 'このブラウザは音声入力に対応していません。Google Chrome など対応ブラウザをご利用いただくか、テキスト入力をご利用ください。';
+        speechToggleButton.disabled = true;
+        speechToggleButton.textContent = '音声入力は利用できません';
+        speechToggleButton.dataset.mode = 'unsupported';
+      } else {
+        speechSupportNoteEl.hidden = false;
+        speechSupportNoteEl.textContent = '音声入力開始を押すとマイクを使用し、再度押すと停止します。';
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        let isRecognizing = false;
+        let stopRequested = false;
+
+        const setStatus = (text, state) => {
+          speechStatusEl.textContent = text;
+          if (state) {
+            speechStatusEl.dataset.state = state;
+          } else {
+            delete speechStatusEl.dataset.state;
+          }
+        };
+
+        recognition.addEventListener('result', (event) => {
+          let finalTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            if (result.isFinal) {
+              finalTranscript += result[0].transcript;
+            }
+          }
+          const trimmed = finalTranscript.trim();
+          if (trimmed) {
+            const currentValue = speechTextEl.value;
+            const needsSeparator = currentValue && !currentValue.endsWith('\n') ? '\n' : '';
+            speechTextEl.value = currentValue ? currentValue + needsSeparator + trimmed : trimmed;
+            speechTextEl.focus();
+            speechTextEl.setSelectionRange(speechTextEl.value.length, speechTextEl.value.length);
+            setStatus('音声を認識しました。続けて入力できます。', 'received');
+          }
+        });
+
+        recognition.addEventListener('start', () => {
+          isRecognizing = true;
+          stopRequested = false;
+          speechToggleButton.disabled = false;
+          speechToggleButton.textContent = '音声入力停止';
+          speechToggleButton.dataset.mode = 'listening';
+          setStatus('音声入力中です。マイクに向かって話してください。', 'listening');
+        });
+
+        recognition.addEventListener('end', () => {
+          isRecognizing = false;
+          speechToggleButton.disabled = false;
+          speechToggleButton.textContent = '音声入力開始';
+          speechToggleButton.dataset.mode = 'idle';
+          if (stopRequested) {
+            setStatus('音声入力は停止中です。', 'idle');
+          } else {
+            setStatus('音声入力が自動停止しました。必要に応じて再開してください。', 'auto-ended');
+          }
+        });
+
+        recognition.addEventListener('error', (event) => {
+          console.error('[speech] recognition error', event);
+          speechToggleButton.disabled = false;
+          speechToggleButton.textContent = '音声入力開始';
+          speechToggleButton.dataset.mode = 'idle';
+          let message = '音声入力でエラーが発生しました: ' + event.error;
+          if (event.error === 'not-allowed') {
+            message = 'マイク利用が拒否されました。ブラウザの設定を確認してください。';
+          } else if (event.error === 'no-speech') {
+            message = '音声が検出されませんでした。再度お試しください。';
+          }
+          setStatus(message, 'error');
+        });
+
+        speechToggleButton.addEventListener('click', () => {
+          if (isRecognizing) {
+            stopRequested = true;
+            speechToggleButton.disabled = true;
+            speechToggleButton.dataset.mode = 'stopping';
+            recognition.stop();
+            return;
+          }
+          try {
+            speechToggleButton.disabled = true;
+            speechToggleButton.dataset.mode = 'starting';
+            recognition.start();
+          } catch (err) {
+            speechToggleButton.disabled = false;
+            speechToggleButton.dataset.mode = 'idle';
+            console.error('[speech] start error', err);
+            setStatus('音声入力の開始に失敗しました。ページを再読み込みして再度お試しください。', 'error');
+          }
+        });
+
+        window.addEventListener('beforeunload', () => {
+          if (isRecognizing) {
+            recognition.stop();
+          }
+        });
+      }
+
       document.getElementById('speechForm').addEventListener('submit', async (event) => {
         event.preventDefault();
-        const textarea = document.getElementById('speechText');
-        const text = textarea.value.trim();
+        const text = speechTextEl.value.trim();
         if (!text) {
           alert('テキストを入力してください');
           return;
@@ -199,7 +331,7 @@
             return;
           }
           addSentCard(text);
-          textarea.value = '';
+          speechTextEl.value = '';
           refreshClientStatus();
         } catch (err) {
           console.error('[trigger] fetch error', err);
